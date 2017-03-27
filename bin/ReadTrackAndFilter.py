@@ -22,7 +22,11 @@ class ReadTrackAndFilter(object):
         self.quality_threshold = 10
         self.is_trackingmappedread = True
         self.vdj_ref_folder = ''
-    
+        self.sam_file = None
+        self.Kmer = 19
+        
+    def set_Kmer(self,kmer):
+        self.Kmer = kmer
     def set_Bamfilename(self,filename):
         self.bam_filename = filename
     
@@ -68,8 +72,6 @@ class ReadTrackAndFilter(object):
         return [kmer_seq,kmer_rc_seq,ref_seq]
     
     def LoadReference(self,Kmer):
-        if self.read_tracked_filename == '':
-            raise ValueError('Unmapped read file name is not specified')
         if self.vdj_ref_folder == '':
             reference_vfilename = '/home/s3cha/data/SpliceDB/create_ig_db/data/imgt_data/ig/func/human/human_IGHV.fa'
             reference_dfilename = '/home/s3cha/data/SpliceDB/create_ig_db/data/imgt_data/ig/func/human/human_IGHD.fa'
@@ -287,8 +289,18 @@ class ReadTrackAndFilter(object):
             print len(filtered_read)
             pickle.dump(filtered_read,open(pfilename,'wb'))
         return [mapped_read_count,unmapped_read_count]
-        
-        
+    
+    def Trim_read_index(self,quality,threshold):
+        index = self.read_length
+#             if sum(quality[:5]) < 5*threshold: #filter the 3' if the first 5 entries has lower quality values.
+#                 return 0
+        for i in quality[::-1]: #trim the 5' end if the quality value is lower than threshold.
+            if i < threshold: 
+                index -= 1
+            else:
+                break
+        return index            
+    
     def Test_input(self,Kmer,pfilename): #tracking the bam file (mapped read to reference region, and unmapped read) and save it to read_tracked_filename
         if self.bam_filename == '':
             raise ValueError("BAM file name is not specified")
@@ -388,6 +400,101 @@ class ReadTrackAndFilter(object):
             print len(filtered_read)
             pickle.dump(filtered_read,open(pfilename,'wb'))
         return [mapped_read_count,unmapped_read_count]
+    
+    class ReadProcessor(object):
+        def __init__(self):
+            pass
+        def processRead(self,read):
+            raise NotImplementedError("Subclass should implement this")
+            pass
+        
+    class SaveToText(ReadProcessor):
+        def __init__(self,text_filename):
+            self.s = open(text_filename,'w')
+            pass
+        
+        def processRead(self,read):
+            self.s.write(read+'\n')
+            pass
+    
+    class SdbnAddRead(ReadProcessor):
+        def __init__(self,sdbn,readclass):
+            self.sdbn = sdbn
+            self.readclass = readclass
+            pass
+        
+        def processRead(self,read):
+            self.sdbn.AddRead(self.readclass,read)
+            pass
+        
+    def SdbConstruction(self,sdbn,readclass):
+        processor = self.SdbnAddRead(sdbn,readclass)
+        self.BamfileProcessor(processor)
+        pass
+    
+    def SaveReadToText(self,text_filename):
+        processor = self.SaveToText(text_filename)
+        self.BamfileProcessor(processor)
+        pass
+    
+    def BamfileProcessor(self,read_processor):
+        if self.bam_filename == '':
+            raise ValueError("BAM file name is not specified")
+        samfile = pysam.AlignmentFile(self.bam_filename,"rb")
+        kmer_seq, kmer_rc_seq, ref_seq = self.LoadReference(self.Kmer)
+        mapped_read_count = 0
+        unmapped_read_count = 0
+        read_length = self.read_length
+        threshold = self.average_quality_threshold
+        
+        if self.is_trackingmappedread:
+            count = 0
+            for read in samfile.fetch('chr14',105566277,106879844,until_eof=True):
+                if self.CheckKmerMap(kmer_seq, kmer_rc_seq, read, self.Kmer):
+                    count += 1
+                else:
+                    count += 1
+                    continue
+                quality = read.query_qualities
+                if float(sum(quality))/read_length < threshold:
+                    continue
+                trim_index = self.Trim_read_index(quality,self.quality_threshold)
+                if trim_index < read_length * 2 / 3:
+                    continue
+                else:
+                    read.query_sequence = read.query_sequence[:trim_index]+'A'*(read_length-trim_index)
+                    read_seq = read.query_sequence
+                    
+#                 filtered_read.append(read_seq)
+#                 sdbn.AddRead(readclass,read_seq)
+                read_processor.processRead(read_seq)
+                mapped_read_count += 1
+            print 'Number of mapped reads: %d, Percent of reads filtered: %f '%(mapped_read_count,float(mapped_read_count)/count*100)
+        count = 0
+        for read in samfile.fetch(until_eof=True):
+            if read.is_unmapped:
+                quality = read.query_qualities
+                if self.CheckKmerMap(kmer_seq, kmer_rc_seq, read, self.Kmer):
+                    count += 1
+                else:
+                    count += 1
+                    continue
+                if float(sum(quality))/read_length < threshold:
+                    continue
+                trim_index = self.Trim_read_index(quality,self.quality_threshold)
+                if trim_index < read_length * 2 / 3:
+                    continue
+                else:
+                    read.query_sequence = read.query_sequence[:trim_index] + 'A'*(read_length-trim_index)
+                    read_seq = read.query_sequence
+#                 filtered_read.append(self.get_ReverseComplement(read_seq))
+#                 sdbn.AddRead(readclass,self.get_ReverseComplement(read_seq))
+                read_processor.processRead(self.get_ReverseComplement(read_seq))
+                unmapped_read_count += 1
+        print 'Number of unmapped reads: %d, Percent of reads filtered: %f '%(unmapped_read_count,float(unmapped_read_count)/count*100)
+        samfile.close()
+        return [mapped_read_count,unmapped_read_count]
+        
 #105566277 and POS < 106879844  
 #106032614,107288051 
 # input_bam = '/home/s3cha/data/SpliceDB/NEW_IG_Graph/KmerTest/StefanoCompR/filtered_read_kmermap_test.bam'
@@ -395,7 +502,14 @@ class ReadTrackAndFilter(object):
 # x.TrackBamfile_withFilter(19,'/home/s3cha/data/SpliceDB/NEW_IG_Graph/KmerTest/uncid/filtered_reads.p')
 # x.TrackFilteredfile(19, '/home/s3cha/data/SpliceDB/NEW_IG_Graph/KmerTest/uncid/filtered_reads.p')
 
-
+if __name__ == '__main__':
+    print 123
+    input_bam = '/media/s3cha/MyBook/VU/bam/UNCID_1580578.35e535d8-7265-4271-a503-5e1728cd5209.sorted_genome_alignments.bam'
+    x = ReadTrackAndFilter()
+    x.set_Bamfilename(input_bam)
+    
+    
+    
 '''
 input_bam = '/media/s3cha/MyBook/VU/bam/UNCID_1580578.35e535d8-7265-4271-a503-5e1728cd5209.sorted_genome_alignments.bam'
 x = ReadTrackAndFilter()
