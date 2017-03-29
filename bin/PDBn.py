@@ -43,7 +43,7 @@ class PDBn(object):
         self.t1 = float(0)
         self.t2 = float(0)
     
-    def __initialize__(self,length_lmer,length_rmer):
+    def __initialize__(self,length_rmer,length_lmer):
         #Rmer node map connects the Rmer sequence to the corresponding object class
         self.length_lmer = length_lmer
         self.length_rmer = length_rmer
@@ -410,7 +410,7 @@ class PDBn(object):
                 number_of_node += 1
         s = open(filename,'w')
         s.write('<Database CreatedBy="s3cha@PDBn.py">\n')
-        s.write('<Gene Name="IG@0" ExonCount="%d" Chromosome="IG" ForwardFlag="1">\n'%(number_of_node))
+        s.write('\t<Gene Name="IG@0" ExonCount="%d" Chromosome="IG" ForwardFlag="1">\n'%(number_of_node))
         source = self.findSourceLnode()
         st = StackNQueue.Queue()
         cycle_test = StackNQueue.Queue()
@@ -429,7 +429,16 @@ class PDBn(object):
                 if prev not in node_index_map:
                     cycle_test.enqueue(node)
                     testing = True
+        
             if testing:
+                if st.peek() == None and cycle_test.peek() != None:
+                    cyc_node = cycle_test.dequeue()
+                    for prev in cyc_node.GetPrev().keys()[::-1]:
+                        if prev not in node_index_map:
+                            print 'Disconnecting cyclic path: ',cyc_node.GetPrev(),cyc_node.GetPrev().get(prev)
+                            del cyc_node.GetPrev()[prev]
+                            del prev.GetNext()[cyc_node]
+                    st.enqueue(cyc_node)
                 continue
             
             node_index_map[node] = index
@@ -438,22 +447,23 @@ class PDBn(object):
                 st.enqueue(next)
             if st.peek() == None and cycle_test.peek() != None:
                 cyc_node = cycle_test.dequeue()
-                for prev in cyc_node.GetPrev():
+                for prev in cyc_node.GetPrev().keys()[::-1]:
                     if prev not in node_index_map:
-                        print node.GetPrev().get(prev)
-                        del node.GetPrev()[prev]
-                        del prev.GetNext()[node]
+                        print 'Disconnecting cyclic path: ',cyc_node.GetPrev(),cyc_node.GetPrev().get(prev)
+                        del cyc_node.GetPrev()[prev]
+                        del prev.GetNext()[cyc_node]
                 st.enqueue(cyc_node)
+
             
         [st.enqueue(node) for node in source]
         def writeNode(node,last_coordinate):
             sequence = node.getSeq()
-            exon_string = ['\t<Exon Index="%d" Start="%d" End="%d" RefInfo="2">\n'%(node_index_map[node],last_coordinate+1,last_coordinate+1+len(sequence))]
-            exon_string.append('\t\t<ExonSequence Length="%d">%s</ExonSequence>\n'%(len(sequence),sequence))
+            exon_string = ['\t\t<Exon Index="%d" Start="%d" End="%d" RefInfo="2">\n'%(node_index_map[node],last_coordinate+1,last_coordinate+1+len(sequence))]
+            exon_string.append('\t\t\t<ExonSequence Length="%d">%s</ExonSequence>\n'%(len(sequence),sequence))
             last_coordinate += 1+len(sequence)
             for prev in node.GetPrev():
-                exon_string.append('\t\t<LinkFrom Index="%d"/>\n'%(node_index_map[prev]))
-            exon_string.append('\t<Exon>\n')
+                exon_string.append('\t\t\t<LinkFrom Index="%d"/>\n'%(node_index_map[prev]))
+            exon_string.append('\t\t<Exon>\n')
             s.write(''.join(exon_string))
             return last_coordinate
         
@@ -475,7 +485,7 @@ class PDBn(object):
 #             last_coordinate = writeNode(node,last_coordinate)
 #             for next in node.GetNext():
 #                 st.enqueue(next)
-        s.write('</Gene>\n')
+        s.write('\t</Gene>\n')
         s.write('</Database>')
         s.close()
         pass

@@ -134,7 +134,7 @@ class ReadTrackAndFilter(object):
                 return True
         return False
     
-    def TrackBamfile(self): #tracking the bam file (mapped read to reference region, and unmapped read) and save it to read_tracked_filename
+    '''def TrackBamfile(self): #tracking the bam file (mapped read to reference region, and unmapped read) and save it to read_tracked_filename
         if self.bam_filename == '':
             raise ValueError("BAM file name is not specified")
         if self.read_tracked_filename == '':
@@ -203,9 +203,9 @@ class ReadTrackAndFilter(object):
         s.close()
         samfile.close()
         
-        return [mapped_read_count,unmapped_read_count]
+        return [mapped_read_count,unmapped_read_count]'''
     
-    def TrackBamfile_withFilter(self,Kmer,pfilename): #tracking the bam file (mapped read to reference region, and unmapped read) and save it to read_tracked_filename
+    '''def TrackBamfile_withFilter(self,Kmer,pfilename): #tracking the bam file (mapped read to reference region, and unmapped read) and save it to read_tracked_filename
         if self.bam_filename == '':
             raise ValueError("BAM file name is not specified")
         if self.read_tracked_filename == '':
@@ -288,20 +288,10 @@ class ReadTrackAndFilter(object):
         if pfilename != '':
             print len(filtered_read)
             pickle.dump(filtered_read,open(pfilename,'wb'))
-        return [mapped_read_count,unmapped_read_count]
+        return [mapped_read_count,unmapped_read_count]'''
+                
     
-    def Trim_read_index(self,quality,threshold):
-        index = self.read_length
-#             if sum(quality[:5]) < 5*threshold: #filter the 3' if the first 5 entries has lower quality values.
-#                 return 0
-        for i in quality[::-1]: #trim the 5' end if the quality value is lower than threshold.
-            if i < threshold: 
-                index -= 1
-            else:
-                break
-        return index            
-    
-    def Test_input(self,Kmer,pfilename): #tracking the bam file (mapped read to reference region, and unmapped read) and save it to read_tracked_filename
+    '''def Test_input(self,Kmer,pfilename): #tracking the bam file (mapped read to reference region, and unmapped read) and save it to read_tracked_filename
         if self.bam_filename == '':
             raise ValueError("BAM file name is not specified")
         if self.read_tracked_filename == '':
@@ -400,6 +390,17 @@ class ReadTrackAndFilter(object):
             print len(filtered_read)
             pickle.dump(filtered_read,open(pfilename,'wb'))
         return [mapped_read_count,unmapped_read_count]
+    '''
+    
+    
+    def Trim_read_index(self,quality,threshold):
+        index = self.read_length
+        for i in quality[::-1]: #trim the 5' end if the quality value is lower than threshold.
+            if i < threshold: 
+                index -= 1
+            else:
+                break
+        return index
     
     class ReadProcessor(object):
         def __init__(self):
@@ -462,7 +463,7 @@ class ReadTrackAndFilter(object):
                 if trim_index < read_length * 2 / 3:
                     continue
                 else:
-                    read.query_sequence = read.query_sequence[:trim_index]+'A'*(read_length-trim_index)
+                    read.query_sequence = read.query_sequence[:trim_index]
                     read_seq = read.query_sequence
                     
 #                 filtered_read.append(read_seq)
@@ -485,7 +486,7 @@ class ReadTrackAndFilter(object):
                 if trim_index < read_length * 2 / 3:
                     continue
                 else:
-                    read.query_sequence = read.query_sequence[:trim_index] + 'A'*(read_length-trim_index)
+                    read.query_sequence = read.query_sequence[:trim_index]
                     read_seq = read.query_sequence
 #                 filtered_read.append(self.get_ReverseComplement(read_seq))
 #                 sdbn.AddRead(readclass,self.get_ReverseComplement(read_seq))
