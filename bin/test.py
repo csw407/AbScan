@@ -87,4 +87,54 @@ plt.legend()
 plt.show()
 
 
+
+
+div = 50000
+count = 0
+num = 1
+s = open('./ig_seq_'+str(num)+'.fa','w')
+for line in open('./final_repertoire.clusters.fa','r'):
+    if count >= div*num:
+        s.close()
+        num += 1
+        s = open('split/ig_seq_'+str(num)+'.fa','w')
+    s.write(line)
+    count += 1
+         
+    
+    
+import os
+s = './run_abscan.sh'
+s = open(s,'w')
+file_list = os.listdir('.')
+command_line = 'echo "python /Users/s3cha/AbScan/codes/pdbn/SdbConstruction.py /Users/s3cha/AbScan/IG_seq/split/ig_seq_2.fa /Users/s3cha/AbScan/IG_seq/ms2db/ig_seq_2.ms2db 20 40" | qsub -j oe -l vmem=20G'
+current = 2
+for file in file_list:
+    command_line = command_line.replace('_%d.'%(current),'_%d.'%(current+1))
+    current += 1
+    s.write(command_line+'\n')
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     

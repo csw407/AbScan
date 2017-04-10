@@ -32,6 +32,8 @@ class SdbConstruction(object):
         self.bam_tracker = ReadTrackAndFilter.ReadTrackAndFilter()
         self.output_filename = None
         self.btime = self.setTime()
+        self.threshold = 1
+        self.naivecut = True
         pass
     
     def setParameter(self,rmer,lmer):
@@ -43,6 +45,11 @@ class SdbConstruction(object):
     
     def setOutputfile(self,output_filename):
         self.output_filename = output_filename
+        pass
+    
+    def setThreshold(self,_threshold,_boolean):
+        self.threshold = _threshold
+        self.naivecut = _boolean
         pass
     
     def graphConstruction_from_text(self,text_filename):
@@ -81,7 +88,8 @@ class SdbConstruction(object):
         print 'Node clustering time: %f (sec)'%(self.getTime())
         self.sdbn.simplify()
         self.sdbn.tipClip()
-        self.sdbn.naiveCutThreshold(1)#########################
+        if self.naivecut:
+            self.sdbn.naiveCutThreshold(self.threshold)#########################
         self.sdbn.simplify()
         print 'Graph simplification time: %f (sec)'%(self.getTime())
         self.sdbn.writeSpliceGraph(self.output_filename)
@@ -124,12 +132,54 @@ class SdbConstruction(object):
 #         self.setMappedReadTrack(False)
 #         self.SaveBamToText(input_bam,output_text)
 #         self.graphConstruction_from_bam(input_bam)
-    
+    def ms2db_to_fasta(self,ms2db_folder,fasta_folder,param):
+        file_list = os.listdir(ms2db_folder)
+        default_command = system_folder.rstrip('/')+'/ACGT03102013_split_IgGraphConvert.py '
+        for file in file_list:
+            current = os.path.splitext(file)
+            input_filename = ms2db_folder.rstrip('/')+'/'+file
+            output_filename = fasta_folder.rstrip('/')+'/'+current[0]+'.fa'
+            command_line = '%s %s %s %s'%(default_command, input_filename, output_filename, str(param))
+            os.system(command_line) 
+        
+
+    def tmp_graphConstruction_from_igseq(self,text_filename):
+        text_filename = '/media/s3cha/MyBook/stefano/7_SAM/final_repertoire.clusters.fa'
+        output_graph_filename = '/home/s3cha/data/AbScan/Database/IG_seq/ms2db/IG_seq_polyclonalAB.ms2db'
+        ms2db_folder = '/home/s3cha/data/AbScan/Database/IG_seq/ms2db'
+        fasta_folder = '/home/s3cha/data/AbScan/Database/IG_seq/fasta'
+        param = '2'
+        rmer = 20
+        lmer = 40
+        self.setOutputfile(output_graph_filename)
+        self.setParameter(rmer,lmer)
+#         self.setThreshold(0,False)
+        f = open(text_filename)
+        div = 100000
+        num = 1
+        count = 0
+        output_filename = os.path.splitext(self.output_filename)
+        self.setTime()
+        for line in f:
+            if count > div*num:
+                self.graphSimplification()
+                num += 1
+                self.setOutputfile(output_filename[0]+'_'+str(num)+output_filename[1]) 
+                self.setTime()
+                self.sdbn = PDBn(rmer,lmer)
+            if line.startswith('#') or line.startswith('>'):
+                continue
+            count += 1
+            self.sdbn.AddRead(self.read_class,line.strip())
+        self.graphSimplification()
+        self.ms2db_to_fasta(ms2db_folder,fasta_folder,param)
+        pass
     
 if __name__ == '__main__': 
     if len(sys.argv) < 2:
         x = SdbConstruction(10,20)
-        x.quick_test()
+#         x.quick_test()
+        x.tmp_graphConstruction_from_igseq(None)
     else:
         input_bam = sys.argv[1]
         output_graph = sys.argv[2]
